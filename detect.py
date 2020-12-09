@@ -10,7 +10,9 @@ import imutils
 import time
 import dlib
 import cv2
-
+import matplotlib.pyplot as plt
+import collections
+import datetime
 
 def sound_alarm(path):
     # play an alarm sound
@@ -28,6 +30,14 @@ def eye_aspect_ratio(eye):
     ear = (A + B) / (2.0 * C)
     # return ear
     return ear
+
+
+def calculate_tilt(upperPoint, lowerPoint):
+    A = abs(upperPoint[1] - lowerPoint[1])
+    B = dist.euclidean(upperPoint, lowerPoint)
+    cosTheta = A/B
+    return cosTheta
+
 
 def mouth_aspect_ratio(mouth):
     # vertical
@@ -76,12 +86,22 @@ predictor = dlib.shape_predictor(args["shape_predictor"])
 (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
 (mStart, mEnd) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
+(nStart, nEnd) = face_utils.FACIAL_LANDMARKS_IDXS["nose"]
+(jStart, jEnd) = face_utils.FACIAL_LANDMARKS_IDXS["jaw"]
 
 # start the video stream thread
 print("[INFO] starting video stream thread...")
 vs = VideoStream(src=args["webcam"]).start()
 time.sleep(1.0)
 # loop over frames from the video stream
+
+ear_stream = []
+frame_stream = []
+framecnt = 0
+
+dequeue = collections.deque(maxlen=10)
+avg_time_per_blink = 99999
+
 while True:
     # resize and convert frame to greyscale
     frame = vs.read()
@@ -104,17 +124,32 @@ while True:
         rightEAR = eye_aspect_ratio(rightEye)
         ear = (leftEAR + rightEAR) / 2.0
 
+        framecnt = framecnt + 1
+        frame_stream.append(framecnt)
+        ear_stream.append(ear)
+
         # check for blink and update count using a blink flag
         if ear < EYE_BLINK_THRESH:
             BFRAMECOUNTER += 1
         else:
             if BFRAMECOUNTER > EYE_AR_BLINK_FRAMES:
                 BLINK_COUNT += 1
+                dequeue.append(datetime.datetime.now())
+                if len(dequeue) != 0:
+                    timediff = (dequeue[len(dequeue)-1] - dequeue[0])
+                    avg_time_per_blink = timediff.total_seconds()/len(dequeue)
+
             BFRAMECOUNTER = 0
 
         mouth = shape[mStart:mEnd]
-
+        nose = shape[nStart:nEnd]
+        jaw = shape[jStart:jEnd]
         mar = mouth_aspect_ratio(mouth)
+
+        upperPoint = nose[0]
+        lowerPoint = jaw[8]
+
+        cosTheta = calculate_tilt(upperPoint, lowerPoint)
 
         # check for yawn and update count using a yawn flag
         if mar > YAWN_THRESH:
@@ -137,9 +172,13 @@ while True:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(frame, "M: {:.2f}".format(mar), (300, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(frame, "CT: {:.2f}".format(cosTheta), (300, 70),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(frame, "B: {:}".format(BLINK_COUNT), (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(frame, "Y: {:}".format(YAWN_COUNT), (30, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(frame, "BT: {:}".format(avg_time_per_blink), (30, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         # if ear is less than threshold increment frame counter
@@ -171,5 +210,8 @@ while True:
     if key == ord("q"):
         break
 # exit
+
+plt.plot(frame_stream, ear_stream)
+plt.show()
 cv2.destroyAllWindows()
 vs.stop()
