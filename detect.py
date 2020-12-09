@@ -68,8 +68,11 @@ EYE_AR_CONSEC_FRAMES = 48
 EYE_BLINK_THRESH = 0.30
 YAWN_THRESH = 0.90
 
+MOUTH_AR_YAWN_FRAMES = 10
+
 # frame counter and blink/yawn counters
 BFRAMECOUNTER = 0
+YFRAMECOUNTER = 0
 COUNTER = 0
 ALARM_ON = False
 BLINK_COUNT = 0
@@ -96,11 +99,14 @@ time.sleep(1.0)
 # loop over frames from the video stream
 
 ear_stream = []
+mar_stream = []
 frame_stream = []
 framecnt = 0
 
-dequeue = collections.deque(maxlen=10)
+blinkdequeue = collections.deque(maxlen=10)
+yawndequeue = collections.deque(maxlen=10)
 avg_time_per_blink = 99999
+avg_time_per_yawn = 99999
 
 while True:
     # resize and convert frame to greyscale
@@ -134,10 +140,10 @@ while True:
         else:
             if BFRAMECOUNTER > EYE_AR_BLINK_FRAMES:
                 BLINK_COUNT += 1
-                dequeue.append(datetime.datetime.now())
-                if len(dequeue) != 0:
-                    timediff = (dequeue[len(dequeue)-1] - dequeue[0])
-                    avg_time_per_blink = timediff.total_seconds()/len(dequeue)
+                blinkdequeue.append(datetime.datetime.now())
+                if len(blinkdequeue) != 0:
+                    timediff = (blinkdequeue[len(blinkdequeue)-1] - blinkdequeue[0])
+                    avg_time_per_blink = timediff.total_seconds()/len(blinkdequeue)
 
             BFRAMECOUNTER = 0
 
@@ -146,6 +152,8 @@ while True:
         jaw = shape[jStart:jEnd]
         mar = mouth_aspect_ratio(mouth)
 
+        mar_stream.append(mar)
+
         upperPoint = nose[0]
         lowerPoint = jaw[8]
 
@@ -153,10 +161,23 @@ while True:
 
         # check for yawn and update count using a yawn flag
         if mar > YAWN_THRESH:
-            YAWN_FLAG += 1
-        elif YAWN_FLAG != 0:
-            YAWN_FLAG = 0
-            YAWN_COUNT += 1
+            YFRAMECOUNTER += 1
+        else:
+            if YFRAMECOUNTER > MOUTH_AR_YAWN_FRAMES:
+                YAWN_COUNT += 1
+                yawndequeue.append(datetime.datetime.now())
+                if len(yawndequeue) != 0:
+                    timediff = (yawndequeue[len(yawndequeue)-1] - yawndequeue[0])
+                    avg_time_per_yawn = timediff.total_seconds()/len(yawndequeue)
+
+            YFRAMECOUNTER = 0
+
+
+        # if mar > YAWN_THRESH:
+        #     YAWN_FLAG += 1
+        # elif YAWN_FLAG != 0:
+        #     YAWN_FLAG = 0
+        #     YAWN_COUNT += 1
 
         # draw eye hulls
         leftEyeHull = cv2.convexHull(leftEye)
@@ -168,17 +189,19 @@ while True:
         cv2.drawContours(frame, [mouthHull], -1, (255, 0, 0), 1)
 
         # display metrics on frame
-        cv2.putText(frame, "E: {:.2f}".format(ear), (300, 30),
+        cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "M: {:.2f}".format(mar), (300, 50),
+        cv2.putText(frame, "MAR: {:.2f}".format(mar), (300, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "CT: {:.2f}".format(cosTheta), (300, 70),
+        cv2.putText(frame, "CosTheta: {:.2f}".format(cosTheta), (300, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "B: {:}".format(BLINK_COUNT), (30, 30),
+        cv2.putText(frame, "AvgYawn: {:.2f}".format(avg_time_per_yawn), (300, 90),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "Y: {:}".format(YAWN_COUNT), (30, 50),
+        cv2.putText(frame, "Blinks: {:}".format(BLINK_COUNT), (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "BT: {:}".format(avg_time_per_blink), (30, 70),
+        cv2.putText(frame, "Yawns: {:}".format(YAWN_COUNT), (30, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(frame, "AvgBlink: {:}".format(avg_time_per_blink), (30, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         # if ear is less than threshold increment frame counter
@@ -212,6 +235,8 @@ while True:
 # exit
 
 plt.plot(frame_stream, ear_stream)
+plt.show()
+plt.plot(frame_stream, mar_stream)
 plt.show()
 cv2.destroyAllWindows()
 vs.stop()
