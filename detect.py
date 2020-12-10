@@ -141,7 +141,7 @@ while True:
             if BFRAMECOUNTER > EYE_AR_BLINK_FRAMES:
                 BLINK_COUNT += 1
                 blinkdequeue.append(datetime.datetime.now())
-                if len(blinkdequeue) != 0:
+                if len(blinkdequeue) > 1:
                     timediff = (blinkdequeue[len(blinkdequeue)-1] - blinkdequeue[0])
                     avg_time_per_blink = timediff.total_seconds()/len(blinkdequeue)
 
@@ -166,7 +166,7 @@ while True:
             if YFRAMECOUNTER > MOUTH_AR_YAWN_FRAMES:
                 YAWN_COUNT += 1
                 yawndequeue.append(datetime.datetime.now())
-                if len(yawndequeue) != 0:
+                if len(yawndequeue) > 1:
                     timediff = (yawndequeue[len(yawndequeue)-1] - yawndequeue[0])
                     avg_time_per_yawn = timediff.total_seconds()/len(yawndequeue)
 
@@ -188,20 +188,25 @@ while True:
         mouthHull = cv2.convexHull(mouth)
         cv2.drawContours(frame, [mouthHull], -1, (255, 0, 0), 1)
 
+        col = (255, 0, 0)
+        cv2.line(frame, tuple(upperPoint), tuple(lowerPoint), col, 2)
+
+        cv2.line(frame, tuple(upperPoint), (upperPoint[0], lowerPoint[1]), (0, 255, 0), 2)
+
         # display metrics on frame
         cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(frame, "MAR: {:.2f}".format(mar), (300, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "CosTheta: {:.2f}".format(cosTheta), (300, 70),
+        cv2.putText(frame, "Cos: {:.5f}".format(cosTheta), (30, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "AvgYawn: {:.2f}".format(avg_time_per_yawn), (300, 90),
+        cv2.putText(frame, "AvYawn: {:.2f}".format(avg_time_per_yawn), (300, 90),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(frame, "Blinks: {:}".format(BLINK_COUNT), (30, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(frame, "Yawns: {:}".format(YAWN_COUNT), (30, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "AvgBlink: {:}".format(avg_time_per_blink), (30, 70),
+        cv2.putText(frame, "AvBlink: {:.2f}".format(avg_time_per_blink), (300, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         # if ear is less than threshold increment frame counter
